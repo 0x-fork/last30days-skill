@@ -3066,6 +3066,7 @@ def run(
         model=None if mock else runtime.rerank_model,
         shortlist_size=settings["rerank_limit"],
         resolved_handles=resolved_handles,
+        primary_handle=x_handle,
     )
     # Corpus titles/snippets must never enter a hosted reasoning prompt. Score
     # every candidate carrying corpus evidence with the deterministic fallback,
@@ -3078,6 +3079,7 @@ def run(
         model=None,
         shortlist_size=settings["rerank_limit"],
         resolved_handles=resolved_handles,
+        primary_handle=x_handle,
     )
     ranked_public = rerank.prune_fallback_entity_misses(ranked_public, topic=topic)
     if hiring_summary:
