@@ -2728,6 +2728,7 @@ def run(
                         trustpilot_domain=trustpilot_domain,
                         trustpilot_domain_is_hint=trustpilot_domain_is_hint,
                         run_started=run_started,
+                        freshness_mode=plan.freshness_mode,
                     )
                 ] = (subquery, source)
 
@@ -2793,6 +2794,7 @@ def run(
                             trustpilot_domain=trustpilot_domain,
                             trustpilot_domain_is_hint=trustpilot_domain_is_hint,
                             run_started=run_started,
+                            freshness_mode=plan.freshness_mode,
                         )
                         retry_done, _ = _wait_for_research([retry_future], stream_config)
                         if not retry_done:
@@ -4868,6 +4870,7 @@ def _retry_thin_sources(
             # pulls for ASINs already enriched in Phase 1. Finalize will enrich
             # any genuinely new products that weren't in Phase 1.
             skip_amazon_enrichment=True,
+            freshness_mode=plan.freshness_mode,
         )
         outcome_note = artifact.get("_source_outcome") if isinstance(artifact, dict) else None
         detail_note = artifact.get("_source_outcome_detail") if isinstance(artifact, dict) else None
@@ -5387,6 +5390,7 @@ def _fetch_youtube_stream(
     config: dict[str, Any],
     *,
     has_ytdlp: bool,
+    freshness_mode: str | None = None,
 ) -> tuple[list[dict], dict]:
     """Search, backfill, transcribe, and comment-enrich one YouTube query."""
     result = None
@@ -5404,6 +5408,7 @@ def _fetch_youtube_stream(
         try:
             result = youtube_yt.search_and_transcribe(
                 yt_query, from_date, to_date, depth=depth, token=sc_token,
+                freshness_mode=freshness_mode,
             )
             if result.get("error"):
                 youtube_failure = str(result["error"])
@@ -5430,6 +5435,7 @@ def _fetch_youtube_stream(
                 sc_result = youtube_yt.search_youtube_sc(
                     yt_query, from_date, to_date, depth=depth, token=sc_token,
                     skip_transcript_ids=transcribed_free_ids,
+                    freshness_mode=freshness_mode,
                 )
             sc_error = str(sc_result["error"]) if sc_result.get("error") else None
             if backfill_thin:
@@ -5538,6 +5544,7 @@ def _retrieve_stream_impl(
     trustpilot_domain_is_hint: bool = False,
     run_started: float | None = None,
     skip_amazon_enrichment: bool = False,
+    freshness_mode: str | None = None,
 ) -> tuple[list[dict], dict]:
     # Early exit if source was rate-limited by a sibling future
     if rate_limited_sources is not None and source in rate_limited_sources:
@@ -5960,13 +5967,14 @@ def _retrieve_stream_impl(
         # thin-source retry share one fetch (hosts without yt-dlp included).
         return fetch_memo.fetch_once(
             (
-                "youtube", yt_query, from_date, to_date, depth, has_ytdlp,
+                "youtube", yt_query, from_date, to_date, depth, freshness_mode, has_ytdlp,
                 env.is_youtube_sc_available(config),
                 env.youtube_sc_min_items(config),
                 env.is_youtube_comments_available(config),
             ),
             lambda: _fetch_youtube_stream(
                 yt_query, from_date, to_date, depth, config, has_ytdlp=has_ytdlp,
+                freshness_mode=freshness_mode,
             ),
             timeout=_memo_wait_seconds(config),
             cacheable=_clean_stream_result,
