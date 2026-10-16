@@ -265,6 +265,12 @@ CT0=<your-ct0-token>
 # X_BEARER_TOKEN=<your-x-api-bearer-token>
 # OR xAI API key (paid)
 # XAI_API_KEY=<your-xai-key>
+# Optional: pin the xAI model (default: grok-4.20-0309-non-reasoning).
+# Set this if your key's model permissions don't include the default, or to
+# select a different available model from console.x.ai. It covers X search
+# only; the xAI planner and rerank models share the same default and are
+# pinned with LAST30DAYS_PLANNER_MODEL / LAST30DAYS_RERANK_MODEL.
+# LAST30DAYS_X_MODEL=grok-4.20-0309-non-reasoning
 # OR Xquik key-based X search
 # XQUIK_API_KEY=<your-xquik-key>
 # OR cookie-jar (free; logs in via your browser session).
