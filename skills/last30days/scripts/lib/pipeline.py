@@ -4230,9 +4230,30 @@ def _topic_first_party_candidates(topic: str) -> set[str]:
         tokens.add(mention.lower())
     for word in re.findall(r"[A-Za-z0-9_]{3,15}", topic or ""):
         lowered = word.lower()
-        if lowered not in relevance.STOPWORDS:
+        # Skip query scaffolding ("review", "news", "latest"): it describes the
+        # search, not the subject, and rerank._handle_is_topic skips it too.
+        if lowered not in relevance.STOPWORDS and lowered not in relevance.LOW_SIGNAL_QUERY_TOKENS:
             tokens.add(lowered)
     return tokens
+
+
+def _handle_contains_topic_word(handle: str, topic: str) -> bool:
+    """True when ``handle`` contains a whole topic word of three or more letters.
+
+    Covers short subject names that sit inside a longer handle ("vuejs" for
+    "Vue"), which rerank._handle_is_topic misses because it only counts
+    containment for words of four or more letters. The containment runs one
+    way only, so a short fragment of a longer topic word ("go" in "Google")
+    never matches, and query scaffolding words ("review", "news") are skipped.
+    """
+    for word in re.findall(r"[a-z0-9]+", (topic or "").lower()):
+        if len(word) < 3:
+            continue
+        if word in relevance.STOPWORDS or word in relevance.LOW_SIGNAL_QUERY_TOKENS:
+            continue
+        if word in handle:
+            return True
+    return False
 
 
 def _name_lane_subject(topic: str) -> str:
@@ -4366,14 +4387,21 @@ def _run_supplemental_searches(
             for h in ([x_handle] + list(x_related or []))
             if h and h.strip()
         }
-        topic_tokens = {t for t in re.findall(r"[a-z0-9]+", topic.lower()) if len(t) > 2}
         seen = {h.lower() for h in resolved_handles_out}
         for h in [*handles, *related_handles]:
             clean = h.lstrip("@").strip().lower()
             if not clean or clean in seen:
                 continue
-            corroborated = clean in explicit or any(
-                token in clean or clean in token for token in topic_tokens
+            # "Looks like the topic's subject" is rerank's test: a handle that
+            # contains a topic word or is spelled from word prefixes. A bare
+            # substring match either way admitted fragments ("go" for "Google")
+            # and missed real subjects ("steipete" for "Peter Steinberger").
+            # Rerank's containment needs a 4+ letter word, so a short subject
+            # name inside a longer handle ("vuejs" for "Vue") is added here.
+            corroborated = (
+                clean in explicit
+                or rerank._handle_is_topic(clean, topic)
+                or _handle_contains_topic_word(clean, topic)
             )
             if corroborated:
                 resolved_handles_out.append(clean)
